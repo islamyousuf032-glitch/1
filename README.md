@@ -11,6 +11,100 @@
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
 
     <style>
+    /* ============================================================
+   CUSTOM CURSOR SYSTEM (Neo-Noir Theme)
+ ============================================================ */
+
+/* ডেস্কটপে ডিফল্ট কার্সার হাইড করার জন্য */
+body {
+  cursor: none;
+}
+
+/* টাচ স্ক্রিন ডিভাইসে ডিফল্ট কার্সার ফিরিয়ে আনার জন্য অ্যাক্সেসিবিলিটি */
+@media (hover: none) {
+  body { cursor: auto; }
+}
+
+#custom-cursor {
+  position: fixed;
+  top: 0; left: 0;
+  z-index: 99999;
+  pointer-events: none;
+  will-change: opacity;
+  transition: opacity 0.35s ease;
+}
+
+/* দ্য ক্রিমসন কোর (কেন্দ্রের ডায়মন্ড আকৃতি) */
+#cursor-core {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #8b0000; /* Crimson Red */
+  transform: translate(-50%, -50%) rotate(45deg);
+  top: 0; left: 0;
+  border-radius: 1px;
+  box-shadow:
+    0 0 4px 1px rgba(139,0,0,0.9),
+    0 0 8px 2px rgba(139,0,0,0.4);
+  will-change: transform, opacity;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+  z-index: 2;
+}
+
+/* দ্য ইঙ্ক আভা (বাইরের ব্লার সার্কেল) */
+#cursor-aura {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  background: rgba(20, 20, 20, 0.7);
+  border-radius: 50%;
+  filter: blur(4px);
+  transform: translate(-50%, -50%) scale(1);
+  top: 0; left: 0;
+  will-change: transform, filter, box-shadow;
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    filter    0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 1;
+}
+
+/* কোনো ইন্টারঅ্যাক্টিভ এলিমেন্টে হোভার করলে আভার পরিবর্তন */
+#cursor-aura.is-hovering {
+  transform: translate(-50%, -50%) scale(1.85);
+  filter: blur(2px);
+  box-shadow:
+    0 0 12px 4px rgba(139,0,0,0.35),
+    0 0 28px 8px rgba(139,0,0,0.15),
+    inset 0 0 6px rgba(139,0,0,0.2);
+  animation: auraPulse 1.6s ease-in-out infinite;
+}
+
+#cursor-core.is-hovering {
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(45deg) scale(0.3);
+}
+
+/* হোভার অবস্থার পালস অ্যানিমেশন */
+@keyframes auraPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 12px 4px rgba(139,0,0,0.35),
+      0 0 28px 8px rgba(139,0,0,0.15);
+  }
+  50% {
+    box-shadow:
+      0 0 18px 7px rgba(192,57,43,0.55),
+      0 0 40px 14px rgba(139,0,0,0.22),
+      0 0 2px 1px rgba(255,80,60,0.3);
+  }
+}
+
+/* মোবাইল বা টাচ ডিভাইসে হাইড করার ইউটিলিটি */
+#custom-cursor.touch-hidden { opacity: 0 !important; }
+
         /* --- CSS VARIABLES & CORE STYLES --- */
         :root {
             --bg-pure: #050505;
@@ -52,7 +146,11 @@
             background: var(--accent-crimson);
         }
 
-        body {
+        body {<div id="custom-cursor" aria-hidden="true">
+  <div id="cursor-aura"></div>
+  <div id="cursor-core"></div>
+</div>
+
             position: relative;
             min-height: 100vh;
         }
@@ -661,6 +759,145 @@
             });
         });
     </script>
+    (function () {
+  'use strict';
+
+  const cursorContainer = document.getElementById('custom-cursor');
+  const core            = document.getElementById('cursor-core');
+  const aura            = document.getElementById('cursor-aura');
+
+  let targetX = -200, targetY = -200;
+  let coreX   = -200, coreY   = -200;
+  let auraX   = -200, auraY   = -200;
+
+  const LERP_FACTOR   = 0.11; // আভা কত স্মুথলি ফলো করবে (কম হলে বেশি ল্যাগ/স্মুথ হবে)
+  const LERP_EPSILON  = 0.05;
+
+  let  isHovering     = false;
+  let  rafId          = null;
+  let  isTouching     = false;
+  let  touchFadeTimer = null;
+
+  /* তোমার ওয়েবসাইটের ইন্টারঅ্যাক্টিভ এলিমেন্টগুলোর সিলেক্টর (প্রয়োজন অনুযায়ী এখানে ক্লাস বা ট্যাগ যোগ করবে) */
+  const INTERACTIVE = 'a, button, .film-card, [role="button"], input, label, select, textarea';
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function showCursor() {
+    cursorContainer.style.opacity = '1';
+    cursorContainer.classList.remove('touch-hidden');
+  }
+  function hideCursor() { cursorContainer.style.opacity = '0'; }
+
+  function setHover(active) {
+    if (active === isHovering) return;
+    isHovering = active;
+    if (active) {
+      core.classList.add('is-hovering');
+      aura.classList.add('is-hovering');
+    } else {
+      core.classList.remove('is-hovering');
+      aura.classList.remove('is-hovering');
+    }
+  }
+
+  function tick() {
+    rafId = requestAnimationFrame(tick);
+    coreX = targetX;
+    coreY = targetY;
+
+    const dx = targetX - auraX;
+    const dy = targetY - auraY;
+
+    if (Math.abs(dx) > LERP_EPSILON || Math.abs(dy) > LERP_EPSILON) {
+      auraX = lerp(auraX, targetX, LERP_FACTOR);
+      auraY = lerp(auraY, targetY, LERP_FACTOR);
+    } else {
+      auraX = targetX;
+      auraY = targetY;
+    }
+
+    core.style.transform = `translate3d(calc(${coreX}px - 50%), calc(${coreY}px - 50%), 0) rotate(45deg)`;
+    core.style.webkitTransform = core.style.transform;
+
+    aura.style.transform = isHovering
+        ? `translate3d(calc(${auraX}px - 50%), calc(${auraY}px - 50%), 0) scale(1.85)`
+        : `translate3d(calc(${auraX}px - 50%), calc(${auraY}px - 50%), 0) scale(1)`;
+    aura.style.webkitTransform = aura.style.transform;
+  }
+
+  document.addEventListener('mousemove', function (e) {
+    if (isTouching) return;
+    targetX = e.clientX;
+    targetY = e.clientY;
+    showCursor();
+  }, { passive: true });
+
+  document.addEventListener('mouseover', function (e) {
+    if (e.target.closest(INTERACTIVE)) setHover(true);
+  }, { passive: true });
+
+  document.addEventListener('mouseout', function (e) {
+    if (e.target.closest(INTERACTIVE)) setHover(false);
+  }, { passive: true });
+
+  document.addEventListener('mouseleave', function () {
+    hideCursor();
+    setHover(false);
+  }, { passive: true });
+
+  document.addEventListener('mouseenter', function () { showCursor(); }, { passive: true });
+
+  function getTouch(e) {
+    return e.touches && e.touches.length > 0
+      ? e.touches[0]
+      : (e.changedTouches && e.changedTouches.length > 0 ? e.changedTouches[0] : null);
+  }
+
+  document.addEventListener('touchstart', function (e) {
+    clearTimeout(touchFadeTimer);
+    isTouching = true;
+    const t = getTouch(e);
+    if (!t) return;
+    targetX = t.clientX; targetY = t.clientY;
+    auraX = targetX; auraY = targetY;
+    showCursor();
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    setHover(el && el.closest(INTERACTIVE) ? true : false);
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function (e) {
+    const t = getTouch(e);
+    if (!t) return;
+    targetX = t.clientX; targetY = t.clientY;
+    showCursor();
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    setHover(el && el.closest(INTERACTIVE) ? true : false);
+  }, { passive: true });
+
+  document.addEventListener('touchend', function () {
+    isTouching = false; setHover(false);
+    clearTimeout(touchFadeTimer);
+    touchFadeTimer = setTimeout(function () { hideCursor(); }, 520);
+  }, { passive: true });
+
+  document.addEventListener('touchcancel', function () {
+    isTouching = false; setHover(false);
+    clearTimeout(touchFadeTimer); hideCursor();
+  }, { passive: true });
+
+  let scrollTimer = null;
+  window.addEventListener('scroll', function () {
+    if (isTouching) return;
+    hideCursor();
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(showCursor, 200);
+  }, { passive: true });
+
+  tick();
+  hideCursor();
+})();
+
 </body>
 </html>
 # 1
