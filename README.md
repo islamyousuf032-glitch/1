@@ -897,6 +897,151 @@ body {
   tick();
   hideCursor();
 })();
+<div id="custom-cursor" aria-hidden="true">
+  <div id="cursor-aura"></div>
+  <div id="cursor-core"></div>
+</div>
+
+(function () {
+  'use strict';
+
+  const cursorContainer = document.getElementById('custom-cursor');
+  const core            = document.getElementById('cursor-core');
+  const aura            = document.getElementById('cursor-aura');
+
+  let targetX = -200, targetY = -200;
+  let coreX   = -200, coreY   = -200;
+  let auraX   = -200, auraY   = -200;
+
+  const LERP_FACTOR   = 0.11; // আভা কত স্মুথলি ফলো করবে (কম হলে বেশি ল্যাগ/স্মুথ হবে)
+  const LERP_EPSILON  = 0.05;
+
+  let  isHovering     = false;
+  let  rafId          = null;
+  let  isTouching     = false;
+  let  touchFadeTimer = null;
+
+  /* তোমার ওয়েবসাইটের ইন্টারঅ্যাক্টিভ এলিমেন্টগুলোর সিলেক্টর (প্রয়োজন অনুযায়ী এখানে ক্লাস বা ট্যাগ যোগ করবে) */
+  const INTERACTIVE = 'a, button, .film-card, [role="button"], input, label, select, textarea';
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function showCursor() {
+    cursorContainer.style.opacity = '1';
+    cursorContainer.classList.remove('touch-hidden');
+  }
+  function hideCursor() { cursorContainer.style.opacity = '0'; }
+
+  function setHover(active) {
+    if (active === isHovering) return;
+    isHovering = active;
+    if (active) {
+      core.classList.add('is-hovering');
+      aura.classList.add('is-hovering');
+    } else {
+      core.classList.remove('is-hovering');
+      aura.classList.remove('is-hovering');
+    }
+  }
+
+  function tick() {
+    rafId = requestAnimationFrame(tick);
+    coreX = targetX;
+    coreY = targetY;
+
+    const dx = targetX - auraX;
+    const dy = targetY - auraY;
+
+    if (Math.abs(dx) > LERP_EPSILON || Math.abs(dy) > LERP_EPSILON) {
+      auraX = lerp(auraX, targetX, LERP_FACTOR);
+      auraY = lerp(auraY, targetY, LERP_FACTOR);
+    } else {
+      auraX = targetX;
+      auraY = targetY;
+    }
+
+    core.style.transform = `translate3d(calc(${coreX}px - 50%), calc(${coreY}px - 50%), 0) rotate(45deg)`;
+    core.style.webkitTransform = core.style.transform;
+
+    aura.style.transform = isHovering
+        ? `translate3d(calc(${auraX}px - 50%), calc(${auraY}px - 50%), 0) scale(1.85)`
+        : `translate3d(calc(${auraX}px - 50%), calc(${auraY}px - 50%), 0) scale(1)`;
+    aura.style.webkitTransform = aura.style.transform;
+  }
+
+  document.addEventListener('mousemove', function (e) {
+    if (isTouching) return;
+    targetX = e.clientX;
+    targetY = e.clientY;
+    showCursor();
+  }, { passive: true });
+
+  document.addEventListener('mouseover', function (e) {
+    if (e.target.closest(INTERACTIVE)) setHover(true);
+  }, { passive: true });
+
+  document.addEventListener('mouseout', function (e) {
+    if (e.target.closest(INTERACTIVE)) setHover(false);
+  }, { passive: true });
+
+  document.addEventListener('mouseleave', function () {
+    hideCursor();
+    setHover(false);
+  }, { passive: true });
+
+  document.addEventListener('mouseenter', function () { showCursor(); }, { passive: true });
+
+  function getTouch(e) {
+    return e.touches && e.touches.length > 0
+      ? e.touches[0]
+      : (e.changedTouches && e.changedTouches.length > 0 ? e.changedTouches[0] : null);
+  }
+
+  document.addEventListener('touchstart', function (e) {
+    clearTimeout(touchFadeTimer);
+    isTouching = true;
+    const t = getTouch(e);
+    if (!t) return;
+    targetX = t.clientX; targetY = t.clientY;
+    auraX = targetX; auraY = targetY;
+    showCursor();
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    setHover(el && el.closest(INTERACTIVE) ? true : false);
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function (e) {
+    const t = getTouch(e);
+    if (!t) return;
+    targetX = t.clientX; targetY = t.clientY;
+    showCursor();
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    setHover(el && el.closest(INTERACTIVE) ? true : false);
+  }, { passive: true });
+
+  document.addEventListener('touchend', function () {
+    isTouching = false; setHover(false);
+    clearTimeout(touchFadeTimer);
+    touchFadeTimer = setTimeout(function () { hideCursor(); }, 520);
+  }, { passive: true });
+
+  document.addEventListener('touchcancel', function () {
+    isTouching = false; setHover(false);
+    clearTimeout(touchFadeTimer); hideCursor();
+  }, { passive: true });
+
+  let scrollTimer = null;
+  window.addEventListener('scroll', function () {
+    if (isTouching) return;
+    hideCursor();
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(showCursor, 200);
+  }, { passive: true });
+
+  tick();
+  hideCursor();
+})();
+
+
 
 </body>
 </html>
